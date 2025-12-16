@@ -87,7 +87,7 @@ wss.on('connection', (ws) => {
     });
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 7681;
 server.listen(PORT, () => {
     console.log(`Mobile Terminal running at http://0.0.0.0:${PORT}`);
 });
