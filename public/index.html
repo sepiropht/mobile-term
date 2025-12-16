@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mobile Terminal</title>
+    <!-- xterm.js CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+            background-color: #000;
+            overflow: hidden; /* Prevent body scroll */
+            font-family: monospace;
+        }
+
+        #app {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        /* Top Bar for Session Switching */
+        #header {
+            background: #222;
+            color: #fff;
+            padding: 10px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            height: 50px;
+            box-sizing: border-box;
+        }
+
+        #header select {
+            background: #333;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 5px;
+            font-size: 16px;
+            flex-grow: 1;
+        }
+
+        #header button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        /* Terminal Container */
+        #terminal-container {
+            flex-grow: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Mobile Toolbar (Above Keyboard) */
+        #toolbar {
+            background: #333;
+            padding: 5px;
+            display: flex;
+            gap: 5px;
+            overflow-x: auto; /* Scrollable if too many buttons */
+            height: 50px;
+            box-sizing: border-box;
+            align-items: center;
+        }
+
+        .tool-btn {
+            background: #444;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 10px 15px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+            min-width: 50px;
+            text-align: center;
+            user-select: none;
+        }
+
+        .tool-btn:active {
+            background: #666;
+        }
+
+        .tool-btn.red {
+            background: #8b0000;
+        }
+                    .tool-btn.active {
+                        background: #28a745; /* Green for active modifier */
+                        border-color: #28a745;
+                    }
+            
+                    /* Force scroll behavior on xterm */
+                    .xterm-viewport {
+                        overflow-y: auto !important;
+                        -webkit-overflow-scrolling: touch;
+                    }
+                </style>
+            </head>
+            <body>
+            
+            <div id="app">
+                <div id="header">
+                    <select id="tool-select">
+                        <option value="bash">Bash</option>
+                        <option value="gemini">Gemini</option>
+                        <option value="vibe">Vibe</option>
+                    </select>
+                    <button id="start-btn">Start</button>
+                </div>
+            
+                <div id="terminal-container"></div>
+            
+                <div id="toolbar">
+                    <div class="tool-btn red" onclick="sendKey('\x03')">Ctrl+C</div>
+                    
+                    <!-- Zellij Specifics -->
+                    <div class="tool-btn" onclick="sendKey('\x13')">Z-Scroll</div> <!-- Ctrl+s for Zellij Scroll Mode -->
+                    <div class="tool-btn" onclick="sendKey('\x07')">Ctrl+g</div>
+                    
+                    <div class="tool-btn" onclick="sendKey('\x1b')">Esc</div>
+                    <div class="tool-btn" onclick="sendKey('\t')">Tab</div>
+                    <div class="tool-btn" onclick="sendKey('|')">|</div>
+                    
+                    <!-- Scrolling -->
+                    <div class="tool-btn" onclick="term.scrollLines(-5)">Buf⬆</div>
+                    <div class="tool-btn" onclick="term.scrollLines(5)">Buf⬇</div>
+                    <div class="tool-btn" onclick="sendKey('\x1b[5~')">PgUp</div>
+                    <div class="tool-btn" onclick="sendKey('\x1b[6~')">PgDn</div>
+                    
+                    <!-- Navigation -->
+                    <div class="tool-btn" onclick="sendKey('\x1b[D')">◀</div>
+                    <div class="tool-btn" onclick="sendKey('\x1b[B')">▼</div>
+                    <div class="tool-btn" onclick="sendKey('\x1b[A')">▲</div>
+                    <div class="tool-btn" onclick="sendKey('\x1b[C')">▶</div>
+                    
+                    <!-- Alt Combos -->
+                    <div class="tool-btn" onclick="sendKey('\x1b\x1b[D')">A◀</div>
+                    <div class="tool-btn" onclick="sendKey('\x1b\x1b[C')">A▶</div>
+                    
+                    <!-- Modifiers -->
+                    <div id="btn-alt" class="tool-btn" onclick="toggleAlt()">Alt</div>
+                    
+                    <div class="tool-btn" onclick="sendKey('/')">/</div>
+                    <div class="tool-btn" onclick="sendKey('-')">-</div>
+                </div>
+            </div>
+    
+    <!-- xterm.js Library -->
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+    <!-- WebGL addon makes rendering faster on mobile -->
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-webgl@0.16.0/lib/xterm-addon-webgl.js"></script>
+    
+    <script>
+            const term = new Terminal({
+                cursorBlink: true,
+                fontSize: 16, // Larger font for mobile
+                fontFamily: 'monospace',
+                theme: {
+                    background: '#000000',
+                    foreground: '#ffffff'
+                },
+                scrollback: 5000, // Explicitly set a large scrollback buffer
+                allowTransparency: true // May improve touch/rendering on some devices
+            });    
+        const fitAddon = new FitAddon.FitAddon();
+        term.loadAddon(fitAddon);
+    
+        const container = document.getElementById('terminal-container');
+        term.open(container);
+        fitAddon.fit();
+    
+        let ws;
+        let isAltPending = false;
+    
+        document.getElementById('start-btn').addEventListener('click', () => {
+            startSession();
+        });
+    
+        function startSession() {
+            if (ws) ws.close();
+    
+            const tool = document.getElementById('tool-select').value;
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}`);
+    
+            ws.onopen = () => {
+                term.reset();
+                
+                // Calculate initial geometry
+                const cols = term.cols;
+                const rows = term.rows;
+    
+                ws.send(JSON.stringify({ 
+                    type: 'start', 
+                    command: tool,
+                    cols: cols,
+                    rows: rows
+                }));
+                
+                term.focus();
+            };
+    
+            ws.onmessage = (event) => {
+                const msg = JSON.parse(event.data);
+                if (msg.type === 'output') {
+                    term.write(msg.data);
+                } else if (msg.type === 'error') {
+                    term.write(`\r\n\x1b[31mError: ${msg.data}\x1b[0m\r\n`);
+                }
+            };
+    
+            ws.onclose = () => {
+                term.write('\r\n\x1b[33mConnection closed.\x1b[0m\r\n');
+            };
+    
+            // Forward user input
+            term.onData(data => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    // Handle Sticky Alt for typing
+                    if (isAltPending) {
+                        data = '\x1b' + data; // Prepend Escape
+                        toggleAlt(); // Turn off after use
+                    }
+                    ws.send(JSON.stringify({ type: 'input', data: data }));
+                }
+            });
+    
+            // Handle Resize
+            const resizeObserver = new ResizeObserver(() => {
+                fitAddon.fit();
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ 
+                        type: 'resize', 
+                        cols: term.cols, 
+                        rows: term.rows 
+                    }));
+                }
+            });
+            resizeObserver.observe(container);
+        }
+    
+        // Toggle Sticky Alt
+        function toggleAlt() {
+            isAltPending = !isAltPending;
+            const btn = document.getElementById('btn-alt');
+            if (isAltPending) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+            term.focus();
+        }
+    
+        // Helper for toolbar buttons
+        function sendKey(data) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                // Apply Alt if pending (unless the button itself sent an Alt combo)
+                if (isAltPending && !data.startsWith('\x1b\x1b')) {
+                    data = '\x1b' + data;
+                    toggleAlt();
+                }
+                ws.send(JSON.stringify({ type: 'input', data: data }));
+            }
+            term.focus(); // Keep focus on terminal so keyboard stays up
+        }
+    
+        // Initial fit
+        window.addEventListener('resize', () => fitAddon.fit());
+        
+        // Auto-start bash on load
+        startSession();
+    
+    </script></body>
+</html>
