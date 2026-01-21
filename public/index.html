@@ -86,6 +86,8 @@
     <div id="toolbar">
         <!-- Line 1: Control/Utility -->
         <div class="tool-btn" onclick="promptNewSession()">New S.</div>
+        <div class="tool-btn" onclick="copySelection()">Copy</div>
+        <div class="tool-btn" onclick="pasteClipboard()">Paste</div>
         <div class="tool-btn red" onclick="sendKey('\x03')">Ctrl+C</div>
         <div class="tool-btn" onclick="sendKey('\x13')">Z-Scroll</div>
         <div class="tool-btn" onclick="sendKey('\x07')">Ctrl+g</div>
@@ -228,6 +230,34 @@
             ws.send(JSON.stringify({ type: 'input', data: data }));
         }
         term.focus(); // Keep focus on terminal so keyboard stays up
+    }
+
+    // Copy selected text to clipboard
+    function copySelection() {
+        const selection = term.getSelection();
+        if (selection) {
+            navigator.clipboard.writeText(selection).then(() => {
+                // Brief visual feedback - flash the terminal
+                term.write('\x1b[7m'); // Inverse video
+                setTimeout(() => term.write('\x1b[27m'), 100); // Normal
+            }).catch(err => {
+                console.error('Copy failed:', err);
+            });
+        }
+        term.focus();
+    }
+
+    // Paste from clipboard to terminal
+    async function pasteClipboard() {
+        try {
+            const text = await navigator.clipboard.readText();
+            if (text && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'input', data: text }));
+            }
+        } catch (err) {
+            console.error('Paste failed:', err);
+        }
+        term.focus();
     }
 
     // New function to prompt for session command
